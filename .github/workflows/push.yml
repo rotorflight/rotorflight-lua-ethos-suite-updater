@@ -104,6 +104,7 @@ jobs:
         run: |
           ART_NAME="rfsuite-updater-${GIT_VER}-${OS_NAME}-${ARCH_NAME}.zip"
           ART_PATH="dist/${ART_NAME}"
+          mkdir -p dist
           if [ -d "src/dist/update_radio_gui.app" ]; then
             (cd src && zip -q -r "../${ART_PATH}" dist/update_radio_gui.app)
           else
@@ -129,6 +130,7 @@ jobs:
         run: |
           ART_NAME="rfsuite-updater-${GIT_VER}-${OS_NAME}-${ARCH_NAME}.zip"
           ART_PATH="dist/${ART_NAME}"
+          mkdir -p dist
           (cd src && zip -q -r "../${ART_PATH}" dist/update_radio_gui)
           echo "ART_NAME=${ART_NAME}" >> $GITHUB_ENV
           echo "ART_PATH=${ART_PATH}" >> $GITHUB_ENV
