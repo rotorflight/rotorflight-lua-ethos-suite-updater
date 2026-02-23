@@ -75,6 +75,8 @@ jobs:
 
       - name: Generate version info
         run: python src/gen_version_info.py
+        env:
+          UPDATER_VERSION: ${{ env.GIT_VER }}
 
       - name: Generate macOS icon
         if: runner.os == 'macOS'

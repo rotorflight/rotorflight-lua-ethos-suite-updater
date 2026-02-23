@@ -1,10 +1,8 @@
-import json
 import os
 import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RELEASE_JSON = os.path.join(HERE, "release.json")
 TEMPLATE = os.path.join(HERE, "version_info_template.txt")
 OUT_FILE = os.path.join(HERE, "version_info.txt")
 
@@ -22,9 +20,10 @@ def parse_version(version_str: str):
 
 
 def main() -> int:
-    with open(RELEASE_JSON, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    version = str(data.get("version", "0.0.0"))
+    version = os.environ.get("UPDATER_VERSION") or os.environ.get("GIT_VER")
+    if not version:
+        print("ERROR: UPDATER_VERSION (or GIT_VER) is required.", file=sys.stderr)
+        return 2
 
     filevers, filever_str = parse_version(version)
     prodvers = filevers

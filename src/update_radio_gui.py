@@ -93,9 +93,7 @@ COPY_SETTLE_SECONDS = 0.03
 TS_SLACK_SECONDS = 2.0
 CACHE_DIRNAME = "cache"
 LOGO_URL = "https://raw.githubusercontent.com/rotorflight/rotorflight-lua-ethos-suite-updater/master/src/logo.png"
-UPDATER_VERSION = "1.0.6"
-UPDATER_RELEASE_JSON_URL = "https://raw.githubusercontent.com/rotorflight/rotorflight-lua-ethos-suite-updater/master/src/release.json"
-UPDATER_INFO_URL = "https://github.com/rotorflight/rotorflight-lua-ethos-suite-updater/tree/master/src/"
+UPDATER_INFO_URL = "https://github.com/rotorflight/rotorflight-lua-ethos-suite-updater/releases"
 def _get_app_dir():
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
@@ -974,26 +972,16 @@ class UpdaterGUI:
             justify=tk.LEFT
         ).pack(anchor=tk.W)
 
-        # Updater update notification (always visible)
+        # Download link (always visible)
         self.update_notice = ttk.Frame(self.root, padding="8")
         self.update_notice.pack(fill=tk.X, padx=10, pady=(0, 5))
-        
-        self.update_notice_label = ttk.Label(
-            self.update_notice,
-            text=f"Checking for updates... (Current: {UPDATER_VERSION})",
-            font=("Arial", 9)
-        )
-        self.update_notice_label.pack(side=tk.LEFT)
-        
+
         self.update_notice_button = ttk.Button(
             self.update_notice,
-            text="Open Download Page",
+            text="Download Latest Updater",
             command=lambda: webbrowser.open(UPDATER_INFO_URL)
         )
         self.update_notice_button.pack(side=tk.RIGHT)
-
-        # Async check for updater updates
-        threading.Thread(target=self.check_updater_update, daemon=True).start()
     
     def log(self, message):
         """Add a message to the log."""
@@ -1136,32 +1124,6 @@ class UpdaterGUI:
         if cur is None or rem is None:
             return current != remote
         return rem > cur
-
-    def check_updater_update(self):
-        """Check if a newer updater version is available."""
-        try:
-            req = Request(UPDATER_RELEASE_JSON_URL, headers={'User-Agent': 'Mozilla/5.0'})
-            with self.urlopen_insecure(req, timeout=10) as response:
-                data = json.loads(response.read().decode())
-            remote_version = data.get("version", "").strip()
-            remote_url = data.get("url") or UPDATER_INFO_URL
-            if remote_version:
-                if self._is_newer_version(UPDATER_VERSION, remote_version):
-                    msg = f"New version available. Current: {UPDATER_VERSION} | Latest: {remote_version}"
-                else:
-                    msg = f"Updater is up to date. Current: {UPDATER_VERSION} | Latest: {remote_version}"
-                self.root.after(0, lambda: self.show_update_notice(msg, remote_url))
-            else:
-                msg = f"Updater version check failed. Current: {UPDATER_VERSION} | Latest: unknown"
-                self.root.after(0, lambda: self.show_update_notice(msg, UPDATER_INFO_URL))
-        except Exception:
-            msg = f"Updater version check failed. Current: {UPDATER_VERSION} | Latest: unknown"
-            self.root.after(0, lambda: self.show_update_notice(msg, UPDATER_INFO_URL))
-
-    def show_update_notice(self, message, url):
-        self.update_notice_label.config(text=message)
-        self.update_notice_button.config(command=lambda: webbrowser.open(url))
-        self.update_notice.pack(fill=tk.X, padx=10, pady=(0, 5))
 
     def save_log(self):
         """Save the current log to a user-selected file."""
