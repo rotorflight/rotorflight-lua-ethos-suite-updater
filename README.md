@@ -29,12 +29,6 @@ Note: The updater is published for Windows, macOS, and Linux.
 
 ## Developer Notes
 
-The updater checks for updates by loading:
-
-`src/release.json`
-
-You should update this file if releasing a new version.
-
 Compilation requirements:
 
 1. Windows build host (PyInstaller target).
