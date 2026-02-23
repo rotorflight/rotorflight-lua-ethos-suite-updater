@@ -1,5 +1,5 @@
-# RFSuite Updater Release Notes
 
-## Unreleased
-- Initial extraction of updater into its own repository.
+## 1.0.6
+- Release version for windows, mac, linux
+
 
