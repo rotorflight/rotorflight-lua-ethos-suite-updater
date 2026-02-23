@@ -569,6 +569,224 @@ class RadioInterface:
         except Exception:
             return
 
+    def _get_volume_label(self, mount_path):
+        """Return volume label for a mount path/drive root, or None."""
+        if sys.platform == "win32":
+            if win32api is None:
+                return None
+            try:
+                drive, _ = os.path.splitdrive(os.path.abspath(mount_path))
+                if not drive:
+                    return None
+                drive_root = drive + "\\"
+                label, *_ = win32api.GetVolumeInformation(drive_root)
+                return label or None
+            except Exception:
+                return None
+        elif sys.platform == "darwin":
+            try:
+                result = subprocess.run(
+                    ["diskutil", "info", "-plist", os.path.abspath(mount_path)],
+                    capture_output=True,
+                    text=False,
+                    check=False,
+                )
+                if result.returncode != 0 or not result.stdout:
+                    return None
+                import plistlib
+                info = plistlib.loads(result.stdout)
+                label = info.get("VolumeName")
+                if isinstance(label, str) and label.strip():
+                    return label.strip()
+                return None
+            except Exception:
+                return None
+        else:
+            try:
+                result = subprocess.run(
+                    ["lsblk", "-no", "LABEL", "--target", os.path.abspath(mount_path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return None
+                label = result.stdout.strip()
+                return label or None
+            except Exception:
+                return None
+
+    def _is_removable_mount(self, mount_path):
+        """Best-effort check for removable media for a mount path."""
+        if sys.platform == "win32":
+            if win32file is None:
+                return False
+            try:
+                drive, _ = os.path.splitdrive(os.path.abspath(mount_path))
+                if not drive:
+                    return False
+                drive_root = drive + "\\"
+                return win32file.GetDriveType(drive_root) == win32file.DRIVE_REMOVABLE
+            except Exception:
+                return False
+        elif sys.platform == "darwin":
+            try:
+                result = subprocess.run(
+                    ["diskutil", "info", "-plist", os.path.abspath(mount_path)],
+                    capture_output=True,
+                    text=False,
+                    check=False,
+                )
+                if result.returncode != 0 or not result.stdout:
+                    return False
+                import plistlib
+                info = plistlib.loads(result.stdout)
+                if info.get("RemovableMedia") is True:
+                    return True
+                if info.get("Ejectable") is True:
+                    return True
+                return False
+            except Exception:
+                return False
+        else:
+            try:
+                result = subprocess.run(
+                    ["lsblk", "-no", "RM", "--target", os.path.abspath(mount_path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return False
+                return result.stdout.strip() == "1"
+            except Exception:
+                return False
+
+    def _find_radio_volume_by_label(self, removable_only=True):
+        """Find a volume named RADIO that contains radio.bin at root."""
+        target_label = "RADIO"
+        if sys.platform == "win32":
+            if win32api is None or win32file is None:
+                return None
+            for drive in win32api.GetLogicalDriveStrings().split('\x00')[:-1]:
+                try:
+                    dtype = win32file.GetDriveType(drive)
+                    if removable_only and dtype != win32file.DRIVE_REMOVABLE:
+                        continue
+                    label = self._get_volume_label(drive)
+                    if not label or label.strip().upper() != target_label:
+                        continue
+                    drive_root = drive if drive.endswith("\\") else drive + "\\"
+                    marker = os.path.join(drive_root, "radio.bin")
+                    if os.path.isfile(marker):
+                        return drive_root
+                except Exception:
+                    continue
+            return None
+        else:
+            seen = set()
+            for root in self._iter_mount_roots():
+                if root in seen:
+                    continue
+                seen.add(root)
+                if removable_only and not self._is_removable_mount(root):
+                    continue
+                label = self._get_volume_label(root)
+                if label and label.strip().upper() == target_label:
+                    marker = os.path.join(root, "radio.bin")
+                    if os.path.isfile(marker):
+                        return root
+            for root in self._iter_lsblk_mounts():
+                if root in seen:
+                    continue
+                seen.add(root)
+                if removable_only and not self._is_removable_mount(root):
+                    continue
+                label = self._get_volume_label(root)
+                if label and label.strip().upper() == target_label:
+                    marker = os.path.join(root, "radio.bin")
+                    if os.path.isfile(marker):
+                        return root
+            return None
+
+    def _find_radio_volume_by_markers(self, removable_only=True):
+        """Find a removable volume that matches known Ethos markers."""
+        def has_marker_combo(root):
+            radio_bin = os.path.isfile(os.path.join(root, "radio.bin"))
+            models_dir = os.path.isdir(os.path.join(root, "models"))
+            bitmaps_dir = os.path.isdir(os.path.join(root, "bitmaps"))
+            if radio_bin and models_dir:
+                return True
+            if radio_bin and bitmaps_dir:
+                return True
+            if models_dir and bitmaps_dir:
+                return True
+            return False
+
+        if sys.platform == "win32":
+            if win32api is None or win32file is None:
+                return None
+            for drive in win32api.GetLogicalDriveStrings().split('\x00')[:-1]:
+                try:
+                    dtype = win32file.GetDriveType(drive)
+                    if removable_only and dtype != win32file.DRIVE_REMOVABLE:
+                        continue
+                    drive_root = drive if drive.endswith("\\") else drive + "\\"
+                    if has_marker_combo(drive_root):
+                        return drive_root
+                except Exception:
+                    continue
+            return None
+        else:
+            seen = set()
+            for root in self._iter_mount_roots():
+                if root in seen:
+                    continue
+                seen.add(root)
+                if removable_only and not self._is_removable_mount(root):
+                    continue
+                if has_marker_combo(root):
+                    return root
+            for root in self._iter_lsblk_mounts():
+                if root in seen:
+                    continue
+                seen.add(root)
+                if removable_only and not self._is_removable_mount(root):
+                    continue
+                if has_marker_combo(root):
+                    return root
+            return None
+
+    def _find_scripts_dir_via_radio_label(self, removable_only=True):
+        """Fallback: use RADIO volume label + radio.bin to create scripts dir."""
+        root = self._find_radio_volume_by_label(removable_only=removable_only)
+        if not root:
+            return None
+        scripts = os.path.join(root, "scripts")
+        if not os.path.isdir(scripts):
+            try:
+                os.makedirs(scripts, exist_ok=True)
+                self._log(f"✓ Created scripts directory on RADIO volume: {scripts}")
+            except Exception as e:
+                self._log(f"⚠ Could not create scripts directory on RADIO volume: {e}")
+                return None
+        return os.path.normpath(scripts)
+
+    def _find_scripts_dir_via_radio_markers(self, removable_only=True):
+        """Fallback: use radio.bin/models/bitmaps markers to create scripts dir."""
+        root = self._find_radio_volume_by_markers(removable_only=removable_only)
+        if not root:
+            return None
+        scripts = os.path.join(root, "scripts")
+        if not os.path.isdir(scripts):
+            try:
+                os.makedirs(scripts, exist_ok=True)
+                self._log(f"✓ Created scripts directory on radio volume: {scripts}")
+            except Exception as e:
+                self._log(f"⚠ Could not create scripts directory on radio volume: {e}")
+                return None
+        return os.path.normpath(scripts)
+
     def scan_for_drives(self):
         """Scan for mounted radio drives."""
         self.drives = {}
@@ -631,6 +849,12 @@ class RadioInterface:
                             return os.path.normpath(scripts)
                 except Exception:
                     continue
+            scripts = self._find_scripts_dir_via_radio_label(removable_only=removable_only)
+            if scripts:
+                return scripts
+            scripts = self._find_scripts_dir_via_radio_markers(removable_only=removable_only)
+            if scripts:
+                return scripts
             return None
         else:
             for root in self._iter_mount_roots():
@@ -644,6 +868,12 @@ class RadioInterface:
                     scripts = os.path.join(root, folder)
                     if os.path.isdir(scripts):
                         return os.path.normpath(scripts)
+            scripts = self._find_scripts_dir_via_radio_label(removable_only=removable_only)
+            if scripts:
+                return scripts
+            scripts = self._find_scripts_dir_via_radio_markers(removable_only=removable_only)
+            if scripts:
+                return scripts
             return None
 
 
