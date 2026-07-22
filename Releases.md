@@ -1,3 +1,10 @@
+## 1.0.11
+
+- Development channel can now install directly from any repository branch, not just master
+- Development channel now lists open pull requests (including forks) as installable options
+- Version list no longer fails to load entirely if a single GitHub API call (releases, branches, or pull requests) times out
+
+
 ## 1.0.10
 
 - Updater executable and macOS app names are now unique to the Ethos Suite updater
