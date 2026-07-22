@@ -1,8 +1,8 @@
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 10, 0),
-    prodvers=(1, 0, 10, 0),
+    filevers=(1, 0, 11, 0),
+    prodvers=(1, 0, 11, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x4,
@@ -17,12 +17,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'Rotorflight'),
           StringStruct('FileDescription', 'Rotorflight Lua Ethos Suite Updater'),
-          StringStruct('FileVersion', '1.0.10.0'),
+          StringStruct('FileVersion', '1.0.11.0'),
           StringStruct('InternalName', 'rotorflight-lua-ethos-suite-updater'),
           StringStruct('LegalCopyright', 'Copyright (C) 2025 Rotorflight Project'),
           StringStruct('OriginalFilename', 'rotorflight-lua-ethos-suite-updater.exe'),
           StringStruct('ProductName', 'Rotorflight Lua Ethos Suite Updater'),
-          StringStruct('ProductVersion', '1.0.10.0')
+          StringStruct('ProductVersion', '1.0.11.0')
         ]
       )
     ]),
