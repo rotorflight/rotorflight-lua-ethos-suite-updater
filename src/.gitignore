@@ -7,3 +7,6 @@ dist/
 __pycache__/
 *.pyc
 *.pyo
+
+# Private build venv created by make.cmd
+.build-venv/

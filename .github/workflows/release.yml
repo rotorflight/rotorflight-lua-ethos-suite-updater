@@ -78,6 +78,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r src/requirements_updater.txt pyinstaller
 
+      - name: Verify HID support before building
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import sys
+          import hid
+          # hidapi's module has hidapi compiled in; the old `hid` wrapper would
+          # need a separate native library the frozen app cannot find.
+          assert hasattr(hid, "device"), f"hid is not hidapi: {hid.__file__}"
+          if sys.platform == "win32":
+              import win32api, win32file
+          print("HID module:", hid.__file__)
+          EOF
+
       - name: Install icon tools (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -109,6 +123,16 @@ jobs:
         working-directory: src
         run: |
           python -m PyInstaller --onefile update_radio_gui.py --name rotorflight-lua-ethos-suite-updater
+
+      - name: Verify HID module was bundled
+        shell: bash
+        run: |
+          if grep -r -a -q -E 'hid\.(cp[0-9]+-win|cpython-[0-9]+-)' src/dist; then
+            echo "HID module found in build"
+          else
+            echo "::error::hid (hidapi) extension module is missing from the built updater"
+            exit 1
+          fi
 
       - name: Package updater (macOS)
         if: runner.os == 'macOS'
