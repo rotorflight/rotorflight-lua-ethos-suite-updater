@@ -4,6 +4,9 @@
 # USB HID communication with Ethos radio
 hidapi>=0.12.0
 
+# USB serial port listing: tells whether the radio is still in debug mode
+pyserial>=3.5
+
 # Windows-specific: Drive detection and management
 # Only needed on Windows, but safe to install on other platforms
 pywin32>=305; sys_platform == 'win32'
