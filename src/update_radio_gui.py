@@ -92,6 +92,9 @@ DOWNLOAD_RETRIES = 3
 DOWNLOAD_RETRY_DELAY = 2
 COPY_SETTLE_SECONDS = 0.03
 TS_SLACK_SECONDS = 2.0
+MOUNT_TIMEOUT_SECONDS = 60
+MOUNT_POLL_SECONDS = 1.0
+MOUNT_RESEND_AFTER_SECONDS = 20
 CACHE_DIRNAME = "cache"
 LOGO_URL = "https://raw.githubusercontent.com/rotorflight/rotorflight-lua-ethos-suite-updater/master/src/logo.png"
 UPDATER_INFO_URL = "https://github.com/rotorflight/rotorflight-lua-ethos-suite-updater/releases"
@@ -521,7 +524,28 @@ class RadioInterface:
             return True
         except Exception as e:
             raise RuntimeError(f"Failed to switch to storage mode: {e}")
-    
+
+    def debug_port_present(self):
+        """True if the radio's USB debug serial port is enumerated (None if unknown).
+
+        The port only exists in debug mode, so it still being there well after a
+        switch to storage mode means the radio missed the command.
+        """
+        try:
+            from serial.tools import list_ports
+        except Exception:
+            return None
+        try:
+            return any(p.vid == ETHOS_VID and p.pid == ETHOS_PID for p in list_ports.comports())
+        except Exception:
+            return None
+
+    def resend_storage_mode(self):
+        """Reopen the HID device and request storage mode again."""
+        self.disconnect()
+        self.connect()
+        return self.switch_to_storage_mode()
+
     def _iter_mount_roots(self):
         """Yield potential mount roots on Unix-like systems."""
         for base in ["/Volumes", "/media", "/mnt", "/run/media"]:
@@ -2991,18 +3015,41 @@ class UpdaterGUI:
                 self.set_status("Waiting for drive to mount...")
                 self.log("Waiting for radio drive to mount...")
             
+                # Windows can take 10-30s to enumerate and mount the volume. Every
+                # mode switch makes the radio drop off the bus and re-enumerate, so
+                # re-sending one while the drive is still mounting restarts the wait.
+                # Re-send at most once, and only if the debug port is still present.
                 scripts_dir = None
-                for attempt in range(10):
+                start = time.monotonic()
+                resent = False
+                next_report = 5
+                while True:
                     if not self.is_updating:
                         return
-                    
+
+                    elapsed = time.monotonic() - start
                     scripts_dir = self.radio.get_scripts_dir()
                     if scripts_dir:
+                        self.log(f"  Radio drive mounted after {elapsed:.0f}s")
                         break
-                    
-                    time.sleep(1)
-                    self.log(f"  Attempt {attempt + 1}/10...")
-                
+
+                    if elapsed >= MOUNT_TIMEOUT_SECONDS:
+                        break
+
+                    if not resent and elapsed >= MOUNT_RESEND_AFTER_SECONDS and self.radio.debug_port_present():
+                        resent = True
+                        self.log("  Radio still in USB debug mode; re-requesting storage mode once...")
+                        try:
+                            self.radio.resend_storage_mode()
+                        except Exception as e:
+                            self.log(f"  Re-request failed: {e}")
+
+                    if elapsed >= next_report:
+                        self.log(f"  Waiting for radio drive ({elapsed:.0f}s of {MOUNT_TIMEOUT_SECONDS}s)...")
+                        next_report += 5
+
+                    time.sleep(MOUNT_POLL_SECONDS)
+
                 if not scripts_dir:
                     self.log("✗ Radio drive not found.")
                     self.log("Please confirm the radio is in storage mode and mounted as a drive.")
